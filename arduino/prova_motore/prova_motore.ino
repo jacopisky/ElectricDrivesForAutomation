@@ -7,10 +7,7 @@
 #define Bp 9
 
 #define Tstep 2000    // us
-#define DELTA_FULL_STEP 1.8
 #define DELTA_HALF_STEP 0.9
-
-#define Tcontrol 2000 // us
 
 #define FORWARD   1
 #define IDLE_ANG  0
@@ -30,7 +27,7 @@ const uint8_t half_step[8][4] = {
 uint8_t state[4] = {0,0,0,0};
 uint8_t i = 0;
 int counter = 0;
-float target = 0;
+float target = 0; // set here the angle in degrees
 
 Timer<1, micros> timer;
 
@@ -50,7 +47,7 @@ void setup() {
   pinMode(B, OUTPUT);
   pinMode(Bp, OUTPUT);
 
-  timer.every(Tcontrol, control);
+  timer.every(Tstep, control);
 }
 
 
@@ -88,4 +85,5 @@ void stepper(uint8_t dir){
   if(half_step[i][3] != half_step[prev][3]){
     digitalWrite(Bp, half_step[i][3]);
   }
+  counter += dir;
 }

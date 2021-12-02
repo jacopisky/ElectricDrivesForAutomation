@@ -1,10 +1,14 @@
 // INSTALL https://mcudude.github.io/MiniCore/package_MCUdude_MiniCore_index.json
+// SCHEDA MiniCore ---> ATMEGA328
+//        clock    ---> 16MHz
+//        variant  ---> 328/328A
+//        boot.loa.---> Yes (UART0)
 
 #include <arduino-timer.h>
 #include <Wire.h>
 #include <VL53L0X.h>
 
-// control variables
+// control gains
 #define Nbar -0.017248141064664
 #define K1    0.017248141064664
 #define K2    0.016428761209089
@@ -15,11 +19,12 @@
 #define B  10
 #define Bp 9
 
-#define Tstep 2000    // us
-#define DELTA_FULL_STEP 1.8
+#define LED_STATUS 13
+
 #define DELTA_HALF_STEP 0.9
 
 #define Tcontrol 20000 // us
+#define Tstep    2000  // us
 
 #define FORWARD   1
 #define IDLE_ANG  0
@@ -55,6 +60,7 @@ void control(){
   unsigned long actual_time = micros();
   float ball_velocity = (ball_position - prev_ball_pos) / (actual_time - prev_time);
   u = Nbar * target + K1 * ball_position + K2 * ball_velocity;
+  prev_ball_pos = ball_position;
 }
 
 void stepper_control(){
@@ -69,19 +75,17 @@ void stepper_control(){
   
 void setup() {
 
-  Serial.begin(9600);
-  
-  pinMode(A,OUTPUT);
-  pinMode(Ap,OUTPUT);
+  pinMode(LED_STATUS, OUTPUT);
+  pinMode(A, OUTPUT);
+  pinMode(Ap, OUTPUT);
   pinMode(B, OUTPUT);
   pinMode(Bp, OUTPUT);
 
   Wire.begin();
 
-  sensor.setTimeout(500);
+  sensor.setTimeout(Tcontrol/1000);
   if (!sensor.init()){
-    Serial.println("Failed to detect and initialize sensor!");
-    while (1) {}
+    trap();
   }
   sensor.setMeasurementTimingBudget(Tcontrol);
   prev_ball_pos = getBallPosition();
@@ -129,4 +133,14 @@ void stepper(uint8_t dir){
   if(half_step[i][3] != half_step[prev][3]){
     digitalWrite(Bp, half_step[i][3]);
   }
+  counter += dir;
+}
+
+void trap(){
+  while(1){
+    digitalWrite(LED_STATUS, HIGH);
+    delay(1000);
+    digitalWrite(LED_STATUS, LOW);
+    delay(1000);
+  }  
 }
