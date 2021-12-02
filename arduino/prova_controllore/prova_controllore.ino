@@ -1,3 +1,5 @@
+// INSTALL https://mcudude.github.io/MiniCore/package_MCUdude_MiniCore_index.json
+
 #include <arduino-timer.h>
 #include <Wire.h>
 #include <VL53L0X.h>
