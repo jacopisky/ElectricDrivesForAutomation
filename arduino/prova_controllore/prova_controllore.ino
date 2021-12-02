@@ -17,7 +17,7 @@
 #define DELTA_FULL_STEP 1.8
 #define DELTA_HALF_STEP 0.9
 
-#define Tcontrol 2000 // us
+#define Tcontrol 20000 // us
 
 #define FORWARD   1
 #define IDLE_ANG  0
@@ -39,8 +39,7 @@ uint8_t i = 0;
 int counter = 0;
 float target = 0;
 
-Timer<1, micros> tim_control;
-Timer<2, micros> tim_stepper;
+Timer<1, micros> timer;
 
 VL53L0X sensor;
 
@@ -82,20 +81,24 @@ void setup() {
     Serial.println("Failed to detect and initialize sensor!");
     while (1) {}
   }
+  sensor.setMeasurementTimingBudget(Tcontrol);
   prev_ball_pos = getBallPosition();
   prev_time = micros();
-  tim_control.every(Tcontrol, control);
-  tim_stepper.every(Tstep, stepper_control);
+  timer.every(Tcontrol, control);
+  timer.every(Tstep, stepper_control);
   
 }
 
 void loop() {
-  tim_control.tick();
-  tim_stepper.tick();
+  timer.tick();
 }
 
 float getStepperAngle(){
   return DELTA_HALF_STEP * counter;
+}
+
+float getBallPosition(){
+  return sensor.readRangeSingleMillimeters() * 0.001;  
 }
 
 void stepper(uint8_t dir){
