@@ -56,11 +56,14 @@ unsigned long prev_time = 0;
 float u;
 
 void control(){
-  float ball_position = getBallPosition();
-  unsigned long actual_time = micros();
-  float ball_velocity = (ball_position - prev_ball_pos) / (actual_time - prev_time);
-  u = Nbar * target + K1 * ball_position + K2 * ball_velocity;
-  prev_ball_pos = ball_position;
+  if(sensor.isMeasureReady()){
+    float ball_pos = sensor.getMillimeters() * 0.001;
+    unsigned long actual_time = micros();
+    float ball_velocity = (ball_position - prev_ball_pos) / (actual_time - prev_time);
+    u = Nbar * target + K1 * ball_position + K2 * ball_velocity;
+    prev_ball_pos = ball_position;
+    prev_time = actual_time;
+  }
 }
 
 void stepper_control(){
@@ -87,8 +90,9 @@ void setup() {
   if (!sensor.init()){
     trap();
   }
-  sensor.setMeasurementTimingBudget(Tcontrol);
-  prev_ball_pos = getBallPosition();
+  sensor.startContinuous(Tcontrol/1000);
+  while(!sensor.isMeasureReady()){}
+  prev_ball_pos = getMillimeters();
   prev_time = micros();
   timer.every(Tcontrol, control);
   timer.every(Tstep, stepper_control);
@@ -101,10 +105,6 @@ void loop() {
 
 float getStepperAngle(){
   return DELTA_HALF_STEP * counter;
-}
-
-float getBallPosition(){
-  return sensor.readRangeSingleMillimeters() * 0.001;  
 }
 
 void stepper(uint8_t dir){
