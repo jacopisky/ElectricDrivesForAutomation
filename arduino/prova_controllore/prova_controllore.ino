@@ -64,7 +64,7 @@ void control(){
 }
 
 void stepper_control(){
-  float actual_motor_angle = getStepperAngle();
+  float actual_motor_angle = getStepperAngle() * DEG_TO_RAD;
   if(u > actual_motor_angle){
     stepper(FORWARD);
   }
