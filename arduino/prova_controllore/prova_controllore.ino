@@ -10,7 +10,7 @@
 
 // control gains
 #define Nbar -0.017248141064664
-#define K1    0.017248141064664
+#define K1    0.0172481410646641
 #define K2    0.016428761209089
 
 // Arduino pinout for stepper driver
