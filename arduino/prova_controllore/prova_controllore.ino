@@ -23,8 +23,8 @@
 
 #define DELTA_HALF_STEP 0.9
 
-#define Tcontrol 20000 // us
-#define Tstep    2000  // us
+#define Tcontrol 100000 // us
+#define Tstep    80000  // us
 
 #define FORWARD   1
 #define IDLE_ANG  0
@@ -47,27 +47,31 @@ int counter = 0;
 float target = 0;
 
 Timer<1, micros> timer;
+Timer<2, micros> timer2;
 
 VL53L0X sensor;
 
 float prev_ball_pos = 0;
 unsigned long prev_time = 0;
 
-float u;
+float u = 0;
 
 void control(){
+  Serial.println(F("c"));
   if(sensor.isMeasureReady()){
     float ball_pos = sensor.getMillimeters() * 0.001;
     unsigned long actual_time = micros();
-    float ball_velocity = (ball_position - prev_ball_pos) / (actual_time - prev_time);
-    u = Nbar * target + K1 * ball_position + K2 * ball_velocity;
-    prev_ball_pos = ball_position;
+    float ball_velocity = (ball_pos - prev_ball_pos) / (actual_time - prev_time);
+    u = Nbar * target + K1 * ball_pos + K2 * ball_velocity;
+    prev_ball_pos = ball_pos;
     prev_time = actual_time;
   }
 }
 
 void stepper_control(){
-  float actual_motor_angle = getStepperAngle();
+  
+  Serial.println(F("s"));
+  float actual_motor_angle = getStepperAngle() * DEG_TO_RAD;
   if(u > actual_motor_angle){
     stepper(FORWARD);
   }
@@ -77,7 +81,7 @@ void stepper_control(){
 }
   
 void setup() {
-
+  Serial.begin(115200);
   pinMode(LED_STATUS, OUTPUT);
   pinMode(A, OUTPUT);
   pinMode(Ap, OUTPUT);
@@ -92,10 +96,11 @@ void setup() {
   }
   sensor.startContinuous(Tcontrol/1000);
   while(!sensor.isMeasureReady()){}
-  prev_ball_pos = getMillimeters();
+  
+  prev_ball_pos = sensor.getMillimeters();
   prev_time = micros();
-  timer.every(Tcontrol, control);
   timer.every(Tstep, stepper_control);
+  //timer2.every(Tcontrol, control);
   
 }
 
