@@ -1,9 +1,3 @@
-// INSTALL https://mcudude.github.io/MiniCore/package_MCUdude_MiniCore_index.json
-// SCHEDA MiniCore ---> ATMEGA328
-//        clock    ---> 16MHz
-//        variant  ---> 328/328A
-//        boot.loa.---> Yes (UART0)
-
 #include <arduino-timer.h>
 #include <Wire.h>
 #include <VL53L0X.h>
