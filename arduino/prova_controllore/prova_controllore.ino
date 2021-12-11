@@ -118,7 +118,12 @@ void setup() {
 }
 
 void loop() {
-  float actual = getHalfStepperAngle() * DEG_TO_RAD;
+  float actual = getHalfStepperAngle();
+  Serial.print(F("now: "));
+  Serial.print(actual);
+  Serial.print(F(" --> "));
+  Serial.print(F("request: "));
+  Serial.println(u);
   if(u > actual){
     half_stepper(FORWARD);
   }
@@ -128,8 +133,9 @@ void loop() {
   delayMicroseconds(HALF_Tstep);
   if(sensor.isMeasureReady()){
     measureBallDynamics();
-    u = Nbar * reference + K1 * ball_pos + K2 * ball_vel;
+    u = (Nbar * reference + K1 * ball_pos + K2 * ball_vel) * RAD_TO_DEG;
   }
+  /*
   #ifdef DATA_LOG
   Serial.print(actual,8);
   Serial.print(F(","));
@@ -141,6 +147,7 @@ void loop() {
   Serial.println();
   Serial.flush();
   #endif
+  */
 }
 
 void measureBallDynamics(){
@@ -161,7 +168,7 @@ float getHalfStepperAngle(){
   return DELTA_HALF_STEP * counter;
 }
 
-void half_stepper(uint8_t dir){
+void half_stepper(int dir){
   uint8_t prev = i;
   if(dir == FORWARD){
     if(i == 7){
