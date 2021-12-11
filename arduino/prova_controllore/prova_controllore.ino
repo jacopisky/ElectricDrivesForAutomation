@@ -1,23 +1,30 @@
 #include <Wire.h>
 #include <VL53L0X.h>
 
-//#define DEBUG
+#define DATA_LOG
 
-// control gains
+// stabilizing feedback control gains
 #define Nbar -0.017248141064664
 #define K1    0.0172481410646641
 #define K2    0.016428761209089
 
-// Arduino pinout for stepper driver
+// low-pass filter
+#define FILTER_b0 0
+#define FILTER_b1 0.222232320828211
+#define FILTER_a0 1
+#define FILTER_a1 0.777767679171789
+
+// Arduino pinout
 #define A  12
 #define Ap 11
 #define B  10
 #define Bp 9
 
+#define LED_STATUS 13
+
+// constants for stepper drive
 #define HALF_Tstep 1100    // us
 #define FULL_Tstep 2000    // us
-
-#define Tcontrol   33000   //us
 
 #define DELTA_HALF_STEP 0.9
 #define DELTA_FULL_STEP 1.8
@@ -26,9 +33,13 @@
 #define IDLE_ANG  0
 #define BACKWARD -1
 
-#define LED_STATUS 13
+// constants of the control
+#define Tcontrol   33000   //us
 
+// distance and speed sensor constants
 #define CALIBRATION_LEN 50
+
+// generic constants
 #define MM_TO_M 0.001
 
 
@@ -56,16 +67,23 @@ const uint8_t full_step[4][4] = {
 uint8_t i = 0;   // index of the stepper motor control's status
 int counter = 0; // numer of steps done by the stepper
 
+unsigned long prev_measure_time = 0;
+float ball_pos = 0;
+float ball_vel = 0;
 float prev_ball_pos = 0;
 float prev_ball_vel = 0;
-unsigned long prev_time = 0;
+float prev_raw_ball_pos = 0;
+float prev_raw_ball_vel = 0;
+
 float reference = 0.25;
 float u = 0;
+
 float offset = 0;
-float var    = 0;
   
 void setup() {
+  #ifdef DATA_LOG
   Serial.begin(115200);
+  #endif
   pinMode(LED_STATUS, OUTPUT);
   pinMode(A, OUTPUT);
   pinMode(Ap, OUTPUT);
@@ -84,9 +102,8 @@ void setup() {
     measures[i] = sensor.getMillimeters();
     accu += measures[i];
   }
-  offset = accu/((float)CALIBRATION_LEN)*MM_TO_M;
-  Serial.print(F("mean: "));
-  Serial.println(offset,8);
+  offset = accu / ((float)CALIBRATION_LEN) * MM_TO_M;
+  /*
   for(uint8_t i = 0; i < CALIBRATION_LEN; i++){
     measures[i] -= (uint16_t)(offset*1000);
   }
@@ -94,16 +111,14 @@ void setup() {
   for(uint8_t i = 0; i < CALIBRATION_LEN; i++){
     accu += measures[i]* measures[i];
   }
-  var = accu/((float)CALIBRATION_LEN)*MM_TO_M*MM_TO_M;
-  Serial.print(F("var : "));
-  Serial.println(var,8);
+  var = accu / ((float)CALIBRATION_LEN) * MM_TO_M * MM_TO_M;
+  */
   while(!sensor.isMeasureReady()){}
-  prev_ball_pos = getBallPosition();
-  prev_time = micros();
+  measureBallDynamics();
 }
 
 void loop() {
-  float actual = getHalfStepperAngle()*DEG_TO_RAD;
+  float actual = getHalfStepperAngle() * DEG_TO_RAD;
   if(u > actual){
     half_stepper(FORWARD);
   }
@@ -112,15 +127,10 @@ void loop() {
   }
   delayMicroseconds(HALF_Tstep);
   if(sensor.isMeasureReady()){
-    float ball_position = getBallPosition();
-    unsigned long actual_time = micros();
-    float ball_velocity = (ball_position - prev_ball_pos) / ((actual_time - prev_time) * 0.000001);
-    u = Nbar * reference + K1 * ball_position + K2 * ball_velocity;
-    prev_ball_pos = ball_position;
-    prev_ball_vel = ball_velocity;
-    prev_time = actual_time;
+    measureBallDynamics();
+    u = Nbar * reference + K1 * ball_pos + K2 * ball_vel;
   }
-  #ifdef DEBUG
+  #ifdef DATA_LOG
   Serial.print(actual,8);
   Serial.print(F(","));
   Serial.print(prev_ball_pos,8);
@@ -133,16 +143,22 @@ void loop() {
   #endif
 }
 
-float getBallPosition(){
-  return sensor.getMillimeters() * 0.001 - offset;  
+void measureBallDynamics(){
+  uint16_t raw = sensor.getMillimeters();
+  unsigned long actual_measure_time = micros();
+  float raw_measure = raw * 0.001 - offset;
+  ball_pos = FILTER_a1 * prev_ball_pos /*+ FILTER_b0 * raw_measure*/ + FILTER_b1 * prev_raw_ball_pos;
+  float raw_measure_vel = (ball_pos - prev_ball_pos) / ((actual_measure_time - prev_measure_time) * 0.000001);
+  ball_vel = FILTER_a1 * prev_ball_vel /*+ FILTER_b0 * raw_measure_vel*/ + FILTER_b1 * prev_raw_ball_vel;
+  prev_raw_ball_vel = raw_measure_vel;
+  prev_ball_vel = ball_vel;
+  prev_raw_ball_pos = raw_measure;
+  prev_ball_pos = ball_pos;
+  prev_measure_time = actual_measure_time;
 }
 
 float getHalfStepperAngle(){
   return DELTA_HALF_STEP * counter;
-}
-
-float getFullStepperAngle(){
-  return DELTA_FULL_STEP * counter;
 }
 
 void half_stepper(uint8_t dir){
@@ -170,35 +186,6 @@ void half_stepper(uint8_t dir){
   }
   if(half_step[i][3] != half_step[prev][3]){
     digitalWrite(Bp, half_step[i][3]);
-  }
-  counter += dir;
-}
-
-void full_stepper(uint8_t dir){
-  uint8_t prev = i;
-  if(dir == FORWARD){
-    if(i == 3){
-      i = -1;
-    }
-    i++;
-  }
-  else if(dir == BACKWARD){
-    if(i == 0){
-      i = 4;
-    }
-    i--;
-  }
-  if(full_step[i][0] != full_step[prev][0]){
-    digitalWrite(A, full_step[i][0]);
-  }
-  if(full_step[i][1] != full_step[prev][1]){
-    digitalWrite(Ap, full_step[i][1]);
-  }
-  if(full_step[i][2] != full_step[prev][2]){
-    digitalWrite(B, full_step[i][2]);
-  }
-  if(full_step[i][3] != full_step[prev][3]){
-    digitalWrite(Bp, full_step[i][3]);
   }
   counter += dir;
 }
