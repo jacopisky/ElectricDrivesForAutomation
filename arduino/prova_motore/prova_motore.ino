@@ -1,12 +1,12 @@
-#include <arduino-timer.h>
-
 // Arduino pinout for stepper driver
 #define A  12
 #define Ap 11
 #define B  10
 #define Bp 9
 
-#define Tstep 3000    // us
+#define HALF_Tstep 1100    // us
+#define FULL_Tstep 2000    // us
+
 #define DELTA_HALF_STEP 0.9
 #define DELTA_FULL_STEP 1.8
 
@@ -32,38 +32,33 @@ const uint8_t full_step[4][4] = {
   {0,0,0,1},
 };
 
-uint8_t state[4] = {0,0,0,0};
 uint8_t i = 0;
 int counter = 0;
-float target = 90; // set here the angle in degrees
-
-Timer<1, micros> timer;
-
-void control(){
-  float actual = getStepperAngle();
-  if(target > actual){
-    stepper(FORWARD);
-  }
-  else if(target < actual){
-    stepper(BACKWARD);
-  }
-}
+float target = 360;
   
 void setup() {
+  Serial.begin(9600);
   pinMode(A,OUTPUT);
   pinMode(Ap,OUTPUT);
   pinMode(B, OUTPUT);
   pinMode(Bp, OUTPUT);
-
-  timer.every(Tstep, control);
+  delay(5000);
 }
 
 
 void loop() {
-  timer.tick();
+  float actual = getHalfStepperAngle();
+  Serial.println(actual);
+  if(target > actual){
+    half_stepper(FORWARD);
+  }
+  else if(target < actual){
+    half_stepper(BACKWARD);
+  }
+  delayMicroseconds(HALF_Tstep);
 }
 
-float getStepperAngle(){
+float getHalfStepperAngle(){
   return DELTA_HALF_STEP * counter;
 }
 
@@ -71,7 +66,7 @@ float getFullStepperAngle(){
   return DELTA_FULL_STEP * counter;
 }
 
-void stepper(uint8_t dir){
+void half_stepper(uint8_t dir){
   uint8_t prev = i;
   if(dir == FORWARD){
     if(i == 7){
