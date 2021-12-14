@@ -4,9 +4,10 @@
 #define DATA_LOG
 
 // stabilizing feedback control gains
-#define Nbar -0.017248141064664
-#define K1    0.0172481410646641
-#define K2    0.016428761209089
+#define Nbar  -54.85
+#define K1    0.049777911540611
+#define K2    0.029571770176360
+#define Ki    0.050269539453956
 
 // low-pass filter
 #define FILTER_b0 0
@@ -34,13 +35,14 @@
 #define BACKWARD -1
 
 // constants of the control
-#define Tcontrol   33000   //us
+#define Tcontrol   20000   //us
 
 // distance and speed sensor constants
 #define CALIBRATION_LEN 50
 
 // generic constants
 #define MM_TO_M 0.001
+#define US_TO_S 0.000001
 
 
 VL53L0X sensor;
@@ -74,6 +76,9 @@ float prev_ball_pos = 0;
 float prev_ball_vel = 0;
 float prev_raw_ball_pos = 0;
 float prev_raw_ball_vel = 0;
+float delayed = 0;
+
+float integrator = 0;
 
 float reference = 0.25;
 float u = 0;
@@ -103,39 +108,25 @@ void setup() {
     accu += measures[i];
   }
   offset = accu / ((float)CALIBRATION_LEN) * MM_TO_M;
-  /*
-  for(uint8_t i = 0; i < CALIBRATION_LEN; i++){
-    measures[i] -= (uint16_t)(offset*1000);
-  }
-  accu = 0;
-  for(uint8_t i = 0; i < CALIBRATION_LEN; i++){
-    accu += measures[i]* measures[i];
-  }
-  var = accu / ((float)CALIBRATION_LEN) * MM_TO_M * MM_TO_M;
-  */
   while(!sensor.isMeasureReady()){}
   measureBallDynamics();
 }
 
 void loop() {
   float actual = getHalfStepperAngle();
-  Serial.print(F("now: "));
-  Serial.print(actual);
-  Serial.print(F(" --> "));
-  Serial.print(F("request: "));
-  Serial.println(u);
-  if(u > actual){
+  if(u - actual > DELTA_HALF_STEP){
     half_stepper(FORWARD);
   }
-  else if(u < actual){
+  else if(u - actual < -DELTA_HALF_STEP){
     half_stepper(BACKWARD);
   }
   delayMicroseconds(HALF_Tstep);
   if(sensor.isMeasureReady()){
     measureBallDynamics();
-    u = (Nbar * reference + K1 * ball_pos + K2 * ball_vel) * RAD_TO_DEG;
+    float err = Nbar * (reference - ball_pos);
+    integrator += delayed * err;
+    u = (Nbar * reference + K1 * ball_pos + K2 * ball_vel + Ki * integrator) * RAD_TO_DEG;
   }
-  /*
   #ifdef DATA_LOG
   Serial.print(actual,8);
   Serial.print(F(","));
@@ -147,15 +138,15 @@ void loop() {
   Serial.println();
   Serial.flush();
   #endif
-  */
 }
 
 void measureBallDynamics(){
   uint16_t raw = sensor.getMillimeters();
   unsigned long actual_measure_time = micros();
+  delayed = (actual_measure_time - prev_measure_time) * US_TO_S;
   float raw_measure = raw * 0.001 - offset;
   ball_pos = FILTER_a1 * prev_ball_pos /*+ FILTER_b0 * raw_measure*/ + FILTER_b1 * prev_raw_ball_pos;
-  float raw_measure_vel = (ball_pos - prev_ball_pos) / ((actual_measure_time - prev_measure_time) * 0.000001);
+  float raw_measure_vel = (ball_pos - prev_ball_pos) / delayed;
   ball_vel = FILTER_a1 * prev_ball_vel /*+ FILTER_b0 * raw_measure_vel*/ + FILTER_b1 * prev_raw_ball_vel;
   prev_raw_ball_vel = raw_measure_vel;
   prev_ball_vel = ball_vel;
