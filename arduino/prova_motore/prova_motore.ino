@@ -4,7 +4,7 @@
 #define B  10
 #define Bp 9
 
-#define HALF_Tstep 1000    // us
+#define HALF_Tstep 1100    // us
 #define FULL_Tstep 2000    // us
 
 #define DELTA_HALF_STEP 0.9
