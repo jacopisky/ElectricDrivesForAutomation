@@ -4,16 +4,16 @@
 #define DATA_LOG
 
 // stabilizing feedback control gains
-#define Nbar  -54.85
-#define K1    0.049777911540611
-#define K2    0.029571770176360
-#define Ki    0.050269539453956
+#define Nbar -0.112000300966376
+#define K1    0.112000300966376
+#define K2    0.044357655264540
+#define Ki    0.169659695657103
 
 // low-pass filter
-#define FILTER_b0 0
-#define FILTER_b1 0.222232320828211
+#define FILTER_b0 0.111635211704660
+#define FILTER_b1 0.111635211704660
 #define FILTER_a0 1
-#define FILTER_a1 0.777767679171789
+#define FILTER_a1 0.776729576590681
 
 // Arduino pinout
 #define A  12
@@ -24,7 +24,7 @@
 #define LED_STATUS 13
 
 // constants for stepper drive
-#define HALF_Tstep 1100    // us
+#define HALF_Tstep 1000    // us
 #define FULL_Tstep 2000    // us
 
 #define DELTA_HALF_STEP 0.9
@@ -145,9 +145,9 @@ void measureBallDynamics(){
   unsigned long actual_measure_time = micros();
   delayed = (actual_measure_time - prev_measure_time) * US_TO_S;
   float raw_measure = raw * 0.001 - offset;
-  ball_pos = FILTER_a1 * prev_ball_pos /*+ FILTER_b0 * raw_measure*/ + FILTER_b1 * prev_raw_ball_pos;
+  ball_pos = FILTER_a1 * prev_ball_pos + FILTER_b0 * raw_measure + FILTER_b1 * prev_raw_ball_pos;
   float raw_measure_vel = (ball_pos - prev_ball_pos) / delayed;
-  ball_vel = FILTER_a1 * prev_ball_vel /*+ FILTER_b0 * raw_measure_vel*/ + FILTER_b1 * prev_raw_ball_vel;
+  ball_vel = FILTER_a1 * prev_ball_vel + FILTER_b0 * raw_measure_vel + FILTER_b1 * prev_raw_ball_vel;
   prev_raw_ball_vel = raw_measure_vel;
   prev_ball_vel = ball_vel;
   prev_raw_ball_pos = raw_measure;
