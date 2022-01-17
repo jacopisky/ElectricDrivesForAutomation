@@ -4,7 +4,7 @@
 #define B  10
 #define Bp 9
 
-#define HALF_Tstep 1100    // us
+#define HALF_Tstep 1000    // us
 #define FULL_Tstep 2000    // us
 
 #define DELTA_HALF_STEP 0.9
@@ -66,19 +66,23 @@ float getFullStepperAngle(){
   return DELTA_FULL_STEP * counter;
 }
 
-void half_stepper(uint8_t dir){
+void half_stepper(int dir){
   uint8_t prev = i;
   if(dir == FORWARD){
     if(i == 7){
-      i = -1;
+      i = 0;
     }
-    i++;
+    else{
+      i++;
+    }
   }
   else if(dir == BACKWARD){
     if(i == 0){
-      i = 8;
+      i = 7;
     }
-    i--;
+    else{
+      i--;
+    }
   }
   if(half_step[i][0] != half_step[prev][0]){
     digitalWrite(A, half_step[i][0]);
@@ -95,19 +99,23 @@ void half_stepper(uint8_t dir){
   counter += dir;
 }
 
-void full_stepper(uint8_t dir){
+void full_stepper(int dir){
   uint8_t prev = i;
   if(dir == FORWARD){
     if(i == 3){
-      i = -1;
+      i = 0;
     }
-    i++;
+    else{
+      i++;
+    }
   }
   else if(dir == BACKWARD){
     if(i == 0){
-      i = 4;
+      i = 3;
     }
-    i--;
+    else{
+      i--;
+    }
   }
   if(full_step[i][0] != full_step[prev][0]){
     digitalWrite(A, full_step[i][0]);
