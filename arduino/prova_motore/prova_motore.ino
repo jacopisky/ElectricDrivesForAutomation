@@ -37,18 +37,15 @@ int counter = 0;
 float target = 360;
   
 void setup() {
-  Serial.begin(9600);
   pinMode(A,OUTPUT);
   pinMode(Ap,OUTPUT);
   pinMode(B, OUTPUT);
   pinMode(Bp, OUTPUT);
-  delay(5000);
 }
 
 
 void loop() {
   float actual = getHalfStepperAngle();
-  Serial.println(actual);
   if(target > actual){
     half_stepper(FORWARD);
   }

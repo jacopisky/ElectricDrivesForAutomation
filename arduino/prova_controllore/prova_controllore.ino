@@ -1,13 +1,14 @@
 #include <Wire.h>
 #include <VL53L0X.h>
 
-#define DATA_LOG
+//#define DATA_LOG
+#define LIMIT
 
 // stabilizing feedback control gains
-#define Nbar -0.112000300966376
-#define K1    0.112000300966376
-#define K2    0.044357655264540
-#define Ki    0.169659695657103
+#define Nbar  2.919748017215793
+#define K1    -18.215491211884718
+#define K2    -5.562088434425063
+#define Ki    -21.273943029103770
 
 // low-pass filter
 #define FILTER_b0 0.111635211704660
@@ -43,6 +44,11 @@
 // generic constants
 #define MM_TO_M 0.001
 #define US_TO_S 0.000001
+
+#ifdef LIMIT
+  #define UPPER_LIMIT 30  //deg
+  #define LOWER_LIMIT -30 //deg
+#endif
 
 
 VL53L0X sensor;
@@ -114,16 +120,29 @@ void setup() {
 
 void loop() {
   float actual = getHalfStepperAngle();
+  
   if(u - actual > DELTA_HALF_STEP){
-    half_stepper(FORWARD);
+    #ifdef LIMIT
+      if(actual + DELTA_HALF_STEP < UPPER_LIMIT){
+        half_stepper(FORWARD);
+      }
+    #else
+      half_stepper(FORWARD);
+    #endif
   }
   else if(u - actual < -DELTA_HALF_STEP){
-    half_stepper(BACKWARD);
+    #ifdef LIMIT
+      if(actual - DELTA_HALF_STEP > LOWER_LIMIT){
+        half_stepper(BACKWARD);
+      }
+    #else
+      half_stepper(BACKWARD);
+    #endif
   }
   delayMicroseconds(HALF_Tstep);
   if(sensor.isMeasureReady()){
     measureBallDynamics();
-    float err = Nbar * (reference - ball_pos);
+    float err = ball_pos - reference;
     integrator += delayed * err;
     u = (Nbar * reference + K1 * ball_pos + K2 * ball_vel + Ki * integrator) * RAD_TO_DEG;
   }
@@ -144,7 +163,7 @@ void measureBallDynamics(){
   uint16_t raw = sensor.getMillimeters();
   unsigned long actual_measure_time = micros();
   delayed = (actual_measure_time - prev_measure_time) * US_TO_S;
-  float raw_measure = raw * 0.001 - offset;
+  float raw_measure = offset - raw * 0.001;
   ball_pos = FILTER_a1 * prev_ball_pos + FILTER_b0 * raw_measure + FILTER_b1 * prev_raw_ball_pos;
   float raw_measure_vel = (ball_pos - prev_ball_pos) / delayed;
   ball_vel = FILTER_a1 * prev_ball_vel + FILTER_b0 * raw_measure_vel + FILTER_b1 * prev_raw_ball_vel;
@@ -159,19 +178,27 @@ float getHalfStepperAngle(){
   return DELTA_HALF_STEP * counter;
 }
 
+float getFullStepperAngle(){
+  return DELTA_FULL_STEP * counter;
+}
+
 void half_stepper(int dir){
   uint8_t prev = i;
   if(dir == FORWARD){
     if(i == 7){
-      i = -1;
+      i = 0;
     }
-    i++;
+    else{
+      i++;
+    }
   }
   else if(dir == BACKWARD){
     if(i == 0){
-      i = 8;
+      i = 7;
     }
-    i--;
+    else{
+      i--;
+    }
   }
   if(half_step[i][0] != half_step[prev][0]){
     digitalWrite(A, half_step[i][0]);
@@ -184,6 +211,39 @@ void half_stepper(int dir){
   }
   if(half_step[i][3] != half_step[prev][3]){
     digitalWrite(Bp, half_step[i][3]);
+  }
+  counter += dir;
+}
+
+void full_stepper(int dir){
+  uint8_t prev = i;
+  if(dir == FORWARD){
+    if(i == 3){
+      i = 0;
+    }
+    else{
+      i++;
+    }
+  }
+  else if(dir == BACKWARD){
+    if(i == 0){
+      i = 3;
+    }
+    else{
+      i--;
+    }
+  }
+  if(full_step[i][0] != full_step[prev][0]){
+    digitalWrite(A, full_step[i][0]);
+  }
+  if(full_step[i][1] != full_step[prev][1]){
+    digitalWrite(Ap, full_step[i][1]);
+  }
+  if(full_step[i][2] != full_step[prev][2]){
+    digitalWrite(B, full_step[i][2]);
+  }
+  if(full_step[i][3] != full_step[prev][3]){
+    digitalWrite(Bp, full_step[i][3]);
   }
   counter += dir;
 }
