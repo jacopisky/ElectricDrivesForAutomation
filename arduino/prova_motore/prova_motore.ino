@@ -67,19 +67,15 @@ void half_stepper(int dir){
   uint8_t prev = i;
   if(dir == FORWARD){
     if(i == 7){
-      i = 0;
+      i = -1;
     }
-    else{
-      i++;
-    }
+    i++;
   }
   else if(dir == BACKWARD){
     if(i == 0){
-      i = 7;
+      i = 8;
     }
-    else{
-      i--;
-    }
+    i--;
   }
   if(half_step[i][0] != half_step[prev][0]){
     digitalWrite(A, half_step[i][0]);
@@ -96,23 +92,19 @@ void half_stepper(int dir){
   counter += dir;
 }
 
-void full_stepper(int dir){
+void full_stepper(uint8_t dir){
   uint8_t prev = i;
   if(dir == FORWARD){
     if(i == 3){
-      i = 0;
+      i = -1;
     }
-    else{
-      i++;
-    }
+    i++;
   }
   else if(dir == BACKWARD){
     if(i == 0){
-      i = 3;
+      i = 4;
     }
-    else{
-      i--;
-    }
+    i--;
   }
   if(full_step[i][0] != full_step[prev][0]){
     digitalWrite(A, full_step[i][0]);
