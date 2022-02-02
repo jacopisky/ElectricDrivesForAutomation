@@ -4,7 +4,7 @@
 #define B  10
 #define Bp 9
 
-#define HALF_Tstep 1000    // us
+#define HALF_Tstep 10000    // us
 #define FULL_Tstep 2000    // us
 
 #define DELTA_HALF_STEP 0.9
@@ -34,13 +34,20 @@ const uint8_t full_step[4][4] = {
 
 uint8_t i = 0;
 int counter = 0;
-float target = 360;
+float target = 45;
   
 void setup() {
+  delay(5000);
   pinMode(A,OUTPUT);
   pinMode(Ap,OUTPUT);
   pinMode(B, OUTPUT);
   pinMode(Bp, OUTPUT);
+  /*
+    half_stepper(BACKWARD);
+  delayMicroseconds(HALF_Tstep);
+    half_stepper(FORWARD);
+  delayMicroseconds(HALF_Tstep);
+  */
 }
 
 
@@ -51,6 +58,9 @@ void loop() {
   }
   else if(target < actual){
     half_stepper(BACKWARD);
+  }
+  else{
+    target=-target;
   }
   delayMicroseconds(HALF_Tstep);
 }
