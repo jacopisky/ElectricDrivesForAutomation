@@ -5,12 +5,12 @@
 // setup
 #define CALIBRATION_LEN 10
 // constants
-#define SOUND_SPEED 343.0 // m/s
+#define SOUND_SPEED 343.1 // m/s
 
 // generic constants
 #define US_TO_S 0.000001
 
-#define T_CONTROL 1000000 //us
+#define T_CONTROL 20000 //us
 
 // ultrasonic sensor variables
 unsigned long start_t_meas, stop_t_meas;
