@@ -16,21 +16,20 @@
 #define SOUND_SPEED 343.1 // m/s
 
 // CONTROL_INTERVALS
-#define T_SENSE 100000   //us
-#define T_CONTROL 10000  //us
+#define T_SENSE 10000   //us
 #define T_HALF_STEP 5000 // us
 
 // BALL MOTION CONTROL
 // stabilizing feedback control gains
-#define Nbar  0.467159682754526
-#define K1    -2.914478593901547
-#define K2    -2.224835373770023
-#define Ki    -1.361532353862637
+#define Nbar  1.991124446746473
+#define K1    -3.342261530002333
+#define K2    -2.073157773027597
+#define Ki    -1.961474556485713
 // low-pass filter for motion measurements
-#define FILTER_b0 0.940148300306698
-#define FILTER_b1 0.940148300306698
+#define FILTER_b0 0.758546992994776
+#define FILTER_b1 0.758546992994776
 #define FILTER_a0 1
-#define FILTER_a1 -0.880296600613396
+#define FILTER_a1 -0.517093985989552
 
 //STEPPER MOTOR CONTROL
 // constants for stepper drive
@@ -55,7 +54,6 @@ const uint8_t half_step[8][4] = {
 unsigned long start_t_meas, stop_t_meas;
 boolean is_meas_ready = false, measuring = false;
 float measure;
-unsigned long prev_meas = 0;
 
 uint8_t j = 0;
 boolean calibration_finished = false;
@@ -69,8 +67,6 @@ float prev_ball_vel = 0;
 float prev_raw_ball_pos = 0;
 float prev_raw_ball_vel = 0;
 unsigned long t_actual_meas, t_prev_meas;
-
-unsigned long prev_control = 0;
 
 // STEPPER
 uint8_t i = 0;   // index of the stepper motor control's status
@@ -103,7 +99,7 @@ void startMeasure() {
 void setup() {
 
   Serial.begin(115200);
-  
+  delay(1000);
   pinMode(A, OUTPUT);
   pinMode(Ap, OUTPUT);
   pinMode(B, OUTPUT);
@@ -111,16 +107,23 @@ void setup() {
   pinMode(TRIGGER_PIN, OUTPUT);
   pinMode(ECHO_PIN,    INPUT);
   attachInterrupt(digitalPinToInterrupt(ECHO_PIN), change, CHANGE);
+
+  for(uint8_t k = 0; k < 45/9*10+10; k++){
+      half_stepper(FORWARD);
+      delayMicroseconds(T_HALF_STEP);  
+  }
+  counter = 0;
+  delay(5000);
+  
 }
 
 void loop() {
-  if (!measuring && micros() - prev_meas > T_SENSE) {
+  if (!measuring && micros() - t_prev_meas > T_SENSE) {
     startMeasure();
   }
   if (is_meas_ready) {
     is_meas_ready = false;
-    prev_meas = micros();
-    t_actual_meas = prev_meas;
+    t_actual_meas = micros();
     measuring = false;
     unsigned long round_time = stop_t_meas - start_t_meas;
     measure = round_time / 2 * SOUND_SPEED * US_TO_S;
@@ -130,38 +133,35 @@ void loop() {
       if (j == CALIBRATION_LEN) {
         calibration_finished = true;
         offset = offset / CALIBRATION_LEN;
-        if (measure < offset) {
-          measure = offset;
-        }
         prev_ball_pos     = offset - measure;
         prev_raw_ball_pos = offset - measure;
-        t_prev_meas = t_actual_meas;
       }
     }
     else {
       float raw = offset - measure;
-      if (raw < 0) {
-        raw = 0;
-      }
+      integrator += (t_actual_meas - t_prev_meas) * US_TO_S * (ball_pos - reference);
+      u = (Nbar * reference + K1 * ball_pos + K2 * ball_vel + integrator * Ki) * RAD_TO_DEG;
       updateBallDynamics(raw);
-      
-      if (micros() - prev_control > T_CONTROL) {
-        integrator += (micros() - prev_control) * US_TO_S * (ball_pos - reference);
-        u = (Nbar*reference + K1 * ball_pos + K2 * ball_vel + integrator * Ki) * RAD_TO_DEG;
-        prev_control = micros();
-      }
-      if (micros() - prev_step > T_HALF_STEP){
-        float actual = getHalfStepperAngle();
-        if (u - actual > DELTA_HALF_STEP) {
-          half_stepper(FORWARD);
-        }
-        else if (u - actual < -DELTA_HALF_STEP) {
-          half_stepper(BACKWARD);
-        }
-      }
+    }
+    
+    t_prev_meas = t_actual_meas;
+  }
+
+  // STEPPER DRIVE
+  if (micros() - prev_step > T_HALF_STEP) {
+    float actual = getHalfStepperAngle();
+    if (u - actual > DELTA_HALF_STEP) {
+      half_stepper(FORWARD);
+      prev_step = micros();
+    }
+    else if (actual-u > DELTA_HALF_STEP) {
+      half_stepper(BACKWARD);
+      prev_step = micros();
     }
   }
+
 }
+
 
 void updateBallDynamics(float raw_measure) {
   ball_pos = FILTER_a1 * prev_ball_pos + FILTER_b0 * raw_measure + FILTER_b1 * prev_raw_ball_pos;
@@ -204,6 +204,5 @@ void half_stepper(int dir) {
   if (half_step[i][3] != half_step[prev][3]) {
     digitalWrite(Bp, half_step[i][3]);
   }
-  prev_step = micros();
   counter += dir;
 }
