@@ -21,15 +21,16 @@
 
 // BALL MOTION CONTROL
 // stabilizing feedback control gains
-#define Nbar  1.991124446746473
-#define K1    -3.342261530002333
-#define K2    -2.073157773027597
-#define Ki    -1.961474556485713
+#define Nbar  0.625273120409421
+#define K1    -1.054640045447864
+#define K2    -1.088045844419463
+#define Ki    -0.371802142809193
+
 // low-pass filter for motion measurements
-#define FILTER_b0 0.758546992994776
-#define FILTER_b1 0.758546992994776
+#define FILTER_b0 0.059117397441749
+#define FILTER_b1 0.059117397441749
 #define FILTER_a0 1
-#define FILTER_a1 -0.517093985989552
+#define FILTER_a1 0.881765205116502
 
 //STEPPER MOTOR CONTROL
 // constants for stepper drive
@@ -74,7 +75,7 @@ int counter = 0; // numer of steps done by the stepper
 unsigned long prev_step = 0;
 
 // CONTROL VARIABLES
-float reference = 0.25;
+float reference = 0.20;
 float integrator = 0;
 float u = 0;
 
@@ -108,13 +109,13 @@ void setup() {
   pinMode(ECHO_PIN,    INPUT);
   attachInterrupt(digitalPinToInterrupt(ECHO_PIN), change, CHANGE);
 
-  for(uint8_t k = 0; k < 45/9*10+10; k++){
-      half_stepper(FORWARD);
-      delayMicroseconds(T_HALF_STEP);  
+  for (uint8_t k = 0; k < 45 / 9 * 10 + 9; k++) {
+    half_stepper(FORWARD);
+    delayMicroseconds(T_HALF_STEP);
   }
   counter = 0;
   delay(5000);
-  
+
 }
 
 void loop() {
@@ -142,8 +143,9 @@ void loop() {
       integrator += (t_actual_meas - t_prev_meas) * US_TO_S * (ball_pos - reference);
       u = (Nbar * reference + K1 * ball_pos + K2 * ball_vel + integrator * Ki) * RAD_TO_DEG;
       updateBallDynamics(raw);
+      Serial.println(ball_pos, 5);
     }
-    
+
     t_prev_meas = t_actual_meas;
   }
 
@@ -154,7 +156,7 @@ void loop() {
       half_stepper(FORWARD);
       prev_step = micros();
     }
-    else if (actual-u > DELTA_HALF_STEP) {
+    else if (actual - u > DELTA_HALF_STEP) {
       half_stepper(BACKWARD);
       prev_step = micros();
     }
@@ -165,7 +167,7 @@ void loop() {
 
 void updateBallDynamics(float raw_measure) {
   ball_pos = FILTER_a1 * prev_ball_pos + FILTER_b0 * raw_measure + FILTER_b1 * prev_raw_ball_pos;
-  float raw_measure_vel = (ball_pos - prev_ball_pos);
+  float raw_measure_vel = ball_pos - prev_ball_pos;
   ball_vel = FILTER_a1 * prev_ball_vel + FILTER_b0 * raw_measure_vel + FILTER_b1 * prev_raw_ball_vel;
   prev_raw_ball_vel = raw_measure_vel;
   prev_ball_vel = ball_vel;
