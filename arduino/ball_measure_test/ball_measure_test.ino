@@ -97,7 +97,6 @@ void loop() {
     }
     else {
       float raw = offset-measure;
-      if(raw < 0){raw=0;}
       updateBallDynamics(raw);
       
       if (micros() - prev_control > T_CONTROL) {
