@@ -5,8 +5,12 @@
 #define B  10
 #define Bp 9
 // ultrasonic sensor
-#define TRIGGER_PIN 3
-#define ECHO_PIN    2
+#define TRIGGER_PIN_ZERO 4
+#define ECHO_PIN_ZERO    2
+#define ECHO_PIN_FAR     3
+#define TRIGGER_PIN_FAR  5
+
+#define MEASURE_TIMEOUT 2798
 
 // SETUP
 #define CALIBRATION_LEN 10
@@ -16,7 +20,7 @@
 #define SOUND_SPEED 343.1 // m/s
 
 // CONTROL_INTERVALS
-#define T_SENSE 10000   //us
+#define T_SENSE 10000    //us
 #define T_HALF_STEP 5000 // us
 
 // BALL MOTION CONTROL
@@ -53,12 +57,15 @@ const uint8_t half_step[8][4] = {
 
 // ultrasonic sensor variables
 unsigned long start_t_meas, stop_t_meas;
-boolean is_meas_ready = false, measuring = false;
-float measure;
-
+boolean measure_zero_ready = false, measure_far_ready = false, measure_ready = false;
+boolean measuring_zero = false, measuring_far = false, measuring = false;
+boolean zero_started = false, far_started = false;
+float measure_zero, measure_far;
+unsigned long t_prev_meas;
 uint8_t j = 0;
 boolean calibration_finished = false;
-float offset = 0;
+float offset_zero = 0;
+float offset_far  = 0;
 
 // filter variables
 float ball_pos = 0;
@@ -67,88 +74,146 @@ float prev_ball_pos = 0;
 float prev_ball_vel = 0;
 float prev_raw_ball_pos = 0;
 float prev_raw_ball_vel = 0;
-unsigned long t_actual_meas, t_prev_meas;
 
-// STEPPER
+// stepper variables
 uint8_t i = 0;   // index of the stepper motor control's status
 int counter = 0; // numer of steps done by the stepper
 unsigned long prev_step = 0;
 
-// CONTROL VARIABLES
+// control variables
 float reference = 0.20;
 float integrator = 0;
 float u = 0;
 
-
-void change() {
-  if (digitalRead(ECHO_PIN)) {
-    start_t_meas = micros();
-  }
-  else {
-    stop_t_meas = micros();
-    is_meas_ready = true;
+void change_zero() {
+  if (measuring_zero) {
+    if (digitalRead(ECHO_PIN_ZERO)) {
+      start_t_meas = micros();
+      zero_started = true;
+    }
+    else {
+      stop_t_meas = micros();
+      measure_zero_ready = true;
+    }
   }
 }
 
-void startMeasure() {
-  measuring = true;
-  digitalWrite(TRIGGER_PIN, HIGH);
+void startMeasureZero() {
+  digitalWrite(TRIGGER_PIN_ZERO, HIGH);
   delayMicroseconds(10);
-  digitalWrite(TRIGGER_PIN, LOW);
+  measuring_zero = true;
+  digitalWrite(TRIGGER_PIN_ZERO, LOW);
+}
+
+void change_far() {
+  if (measuring_far) {
+    if (digitalRead(ECHO_PIN_FAR)) {
+      start_t_meas = micros();
+      far_started = true;
+    }
+    else {
+      stop_t_meas = micros();
+      measure_far_ready = true;
+    }
+  }
+}
+
+void startMeasureFar() {
+  digitalWrite(TRIGGER_PIN_FAR, HIGH);
+  delayMicroseconds(10);
+  measuring_far = true;
+  digitalWrite(TRIGGER_PIN_FAR, LOW);
 }
 
 void setup() {
 
   Serial.begin(115200);
-  delay(1000);
-  pinMode(A, OUTPUT);
-  pinMode(Ap, OUTPUT);
-  pinMode(B, OUTPUT);
-  pinMode(Bp, OUTPUT);
-  pinMode(TRIGGER_PIN, OUTPUT);
-  pinMode(ECHO_PIN,    INPUT);
-  attachInterrupt(digitalPinToInterrupt(ECHO_PIN), change, CHANGE);
 
-  for (uint8_t k = 0; k < 45 / 9 * 10 + 9; k++) {
+  pinMode(A,  OUTPUT);
+  pinMode(Ap, OUTPUT);
+  pinMode(B,  OUTPUT);
+  pinMode(Bp, OUTPUT);
+
+  pinMode(TRIGGER_PIN_FAR,  OUTPUT);
+  pinMode(TRIGGER_PIN_ZERO, OUTPUT);
+  noInterrupts();
+  pinMode(ECHO_PIN_ZERO,    INPUT);
+  attachInterrupt(digitalPinToInterrupt(ECHO_PIN_ZERO), change_zero, CHANGE);
+  pinMode(ECHO_PIN_FAR,     INPUT);
+  attachInterrupt(digitalPinToInterrupt(ECHO_PIN_FAR),  change_far,  CHANGE);
+  interrupts();
+
+  for (uint8_t k = 0; k < 45 / DELTA_HALF_STEP + 8; k++) {
     half_stepper(FORWARD);
     delayMicroseconds(T_HALF_STEP);
   }
   counter = 0;
   delay(5000);
-
 }
 
 void loop() {
-  if (!measuring && micros() - t_prev_meas > T_SENSE) {
-    startMeasure();
-  }
-  if (is_meas_ready) {
-    is_meas_ready = false;
-    t_actual_meas = micros();
-    measuring = false;
-    unsigned long round_time = stop_t_meas - start_t_meas;
-    measure = round_time / 2 * SOUND_SPEED * US_TO_S;
-    if (!calibration_finished) {
-      offset += measure;
-      j++;
-      if (j == CALIBRATION_LEN) {
-        calibration_finished = true;
-        offset = offset / CALIBRATION_LEN;
-        prev_ball_pos     = offset - measure;
-        prev_raw_ball_pos = offset - measure;
+
+
+  if (!measuring) {
+    if (micros() - t_prev_meas > T_SENSE) {
+      measuring      = true;
+    }
+    if (measure_ready) {
+      measure_ready = false;
+      float raw = getPositionTrusted();
+      if (!calibration_finished) {
+        offset_zero += measure_zero;
+        offset_far  += measure_far;
+        j++;
+        if (j == CALIBRATION_LEN) {
+          calibration_finished = true;
+          offset_zero = offset_zero / CALIBRATION_LEN;
+          offset_far  = offset_far  / CALIBRATION_LEN;
+          prev_ball_pos     = raw;
+          prev_raw_ball_pos = raw;
+        }
+      }
+      else {
+        updateBallDynamics(raw);
+        integrator += T_SENSE * US_TO_S * (ball_pos - reference);
+        u = (Nbar * reference + K1 * ball_pos + K2 * ball_vel + integrator * Ki) * RAD_TO_DEG;
+        Serial.println(ball_pos);
       }
     }
-    else {
-      float raw = offset - measure;
-      integrator += (t_actual_meas - t_prev_meas) * US_TO_S * (ball_pos - reference);
-      u = (Nbar * reference + K1 * ball_pos + K2 * ball_vel + integrator * Ki) * RAD_TO_DEG;
-      updateBallDynamics(raw);
-      Serial.println(ball_pos, 5);
-    }
-
-    t_prev_meas = t_actual_meas;
   }
-
+  else {
+    if (!measuring_zero && !measuring_far) {
+      startMeasureZero();
+    }
+    if (measuring_zero && zero_started && micros() - start_t_meas >= MEASURE_TIMEOUT) {
+      measure_zero_ready = true;
+      stop_t_meas = micros();
+    }
+    if (measuring_zero && measure_zero_ready) {
+      measuring_zero = false;
+      measure_zero_ready = false;
+      zero_started = false;
+      float round_time = (float)(stop_t_meas - start_t_meas);
+      measure_zero = round_time / 2.0 * US_TO_S * SOUND_SPEED;
+      delayMicroseconds(1500);
+      startMeasureFar();
+    }
+    if (measuring_far && far_started && micros() - start_t_meas >= MEASURE_TIMEOUT) {
+      measure_far_ready = true;
+      stop_t_meas = micros();
+    }
+    if (measuring_far && measure_far_ready) {
+      measuring_far = false;
+      far_started = false;
+      measuring = false;
+      t_prev_meas = micros();
+      measure_far_ready = false;
+      float round_time = (float)(stop_t_meas - start_t_meas);
+      measure_far = round_time / 2.0 * US_TO_S * SOUND_SPEED;
+      measure_ready = true;
+    }
+  }
+  
   // STEPPER DRIVE
   if (micros() - prev_step > T_HALF_STEP) {
     float actual = getHalfStepperAngle();
@@ -161,19 +226,23 @@ void loop() {
       prev_step = micros();
     }
   }
-
 }
-
 
 void updateBallDynamics(float raw_measure) {
   ball_pos = FILTER_a1 * prev_ball_pos + FILTER_b0 * raw_measure + FILTER_b1 * prev_raw_ball_pos;
-  float raw_measure_vel = ball_pos - prev_ball_pos;
+  float raw_measure_vel = (ball_pos - prev_ball_pos)*20;
   ball_vel = FILTER_a1 * prev_ball_vel + FILTER_b0 * raw_measure_vel + FILTER_b1 * prev_raw_ball_vel;
   prev_raw_ball_vel = raw_measure_vel;
   prev_ball_vel = ball_vel;
   prev_raw_ball_pos = raw_measure;
   prev_ball_pos = ball_pos;
-  t_prev_meas = t_actual_meas;
+}
+
+float getPositionTrusted() {
+  if (measure_zero > measure_far) {
+    return offset_far - measure_far;
+  }
+  return measure_zero - offset_zero;
 }
 
 float getHalfStepperAngle() {
