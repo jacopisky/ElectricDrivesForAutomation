@@ -25,10 +25,10 @@
 
 // BALL MOTION CONTROL
 // stabilizing feedback control gains
-#define Nbar  0.625273120409421
-#define K1    -1.054640045447864
-#define K2    -1.088045844419463
-#define Ki    -0.371802142809193
+#define Nbar  0.525229421143914//0.625273120409421
+#define K1    -0.885897638176206//-1.054640045447864
+#define K2    -0.913958509312349//-1.088045844419463
+#define Ki    -0.312313799959722//-0.371802142809193
 
 // low-pass filter for motion measurements
 #define FILTER_b0 0.059117397441749
@@ -127,7 +127,7 @@ void startMeasureFar() {
 
 void setup() {
 
-  Serial.begin(115200);
+  //Serial.begin(115200);
 
   pinMode(A,  OUTPUT);
   pinMode(Ap, OUTPUT);
@@ -143,7 +143,7 @@ void setup() {
   attachInterrupt(digitalPinToInterrupt(ECHO_PIN_FAR),  change_far,  CHANGE);
   interrupts();
 
-  for (uint8_t k = 0; k < 45 / DELTA_HALF_STEP + 8; k++) {
+  for (uint8_t k = 0; k < 45 / DELTA_HALF_STEP + 10; k++) {
     half_stepper(FORWARD);
     delayMicroseconds(T_HALF_STEP);
   }
@@ -177,7 +177,7 @@ void loop() {
         updateBallDynamics(raw);
         integrator += T_SENSE * US_TO_S * (ball_pos - reference);
         u = (Nbar * reference + K1 * ball_pos + K2 * ball_vel + integrator * Ki) * RAD_TO_DEG;
-        Serial.println(ball_pos);
+        //Serial.println(ball_pos);
       }
     }
   }
@@ -230,7 +230,7 @@ void loop() {
 
 void updateBallDynamics(float raw_measure) {
   ball_pos = FILTER_a1 * prev_ball_pos + FILTER_b0 * raw_measure + FILTER_b1 * prev_raw_ball_pos;
-  float raw_measure_vel = (ball_pos - prev_ball_pos)*20;
+  float raw_measure_vel = (ball_pos - prev_ball_pos);
   ball_vel = FILTER_a1 * prev_ball_vel + FILTER_b0 * raw_measure_vel + FILTER_b1 * prev_raw_ball_vel;
   prev_raw_ball_vel = raw_measure_vel;
   prev_ball_vel = ball_vel;
